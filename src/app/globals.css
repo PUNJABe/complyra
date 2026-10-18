@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+:root {
+  --canvas: #f3f5f8;
+  --surface: #ffffff;
+  --sunken: #eaedf2;
+  --ink: #10182b;
+  --muted: #5a6478;
+  --line: #dde2ea;
+  --brand: #1e3a8a;
+  --brand-ink: #ffffff;
+  --brand-soft: #e6ebfa;
+  --ok: #0b7a55;
+  --ok-bg: #ddf3ea;
+  --high: #b42a26;
+  --high-bg: #fbe4e2;
+  --med: #96590a;
+  --med-bg: #fbeed7;
+  --low: #4d586c;
+  --low-bg: #e6e9ef;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #0a0e16;
+    --surface: #121826;
+    --sunken: #0e131f;
+    --ink: #e8ecf4;
+    --muted: #97a2b8;
+    --line: #243047;
+    --brand: #8da6ff;
+    --brand-ink: #0a0e16;
+    --brand-soft: #1a2442;
+    --ok: #4cd6a0;
+    --ok-bg: #0f2d24;
+    --high: #ff8b85;
+    --high-bg: #3a1716;
+    --med: #f0b35c;
+    --med-bg: #36260c;
+    --low: #a7b1c5;
+    --low-bg: #1c2434;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --canvas: #0a0e16;
+  --surface: #121826;
+  --sunken: #0e131f;
+  --ink: #e8ecf4;
+  --muted: #97a2b8;
+  --line: #243047;
+  --brand: #8da6ff;
+  --brand-ink: #0a0e16;
+  --brand-soft: #1a2442;
+  --ok: #4cd6a0;
+  --ok-bg: #0f2d24;
+  --high: #ff8b85;
+  --high-bg: #3a1716;
+  --med: #f0b35c;
+  --med-bg: #36260c;
+  --low: #a7b1c5;
+  --low-bg: #1c2434;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-high: var(--high);
+  --color-high-bg: var(--high-bg);
+  --color-med: var(--med);
+  --color-med-bg: var(--med-bg);
+  --color-low: var(--low);
+  --color-low-bg: var(--low-bg);
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+}
+
+html {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body { min-height: 100vh; line-height: 1.5; }
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+::selection { background: var(--brand-soft); }
+
+.bar-grow { animation: bar-grow 420ms ease-out both; transform-origin: bottom; }
+@keyframes bar-grow { from { transform: scaleY(0.2); opacity: 0.4; } to { transform: scaleY(1); opacity: 1; } }

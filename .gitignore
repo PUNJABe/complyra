@@ -1,0 +1,9 @@
+node_modules/
+.next/
+complyra/
+*.tsbuildinfo
+data/*
+!data/.gitkeep
+.env
+.env.local
+*.log
