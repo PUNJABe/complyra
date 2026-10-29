@@ -186,7 +186,7 @@ function pdfHeaderField(text: string): string | undefined {
 
 function isPdfIgnoredColumn(text: string): boolean {
   const value = norm(text);
-  return value === "closingbalance" || value === "runningbalance" || value === "availablebalance";
+  return value === "valuedt" || value === "closingbalance" || value === "runningbalance" || value === "availablebalance";
 }
 
 function isPdfHeaderLine(line: PdfLine): boolean {
@@ -223,17 +223,14 @@ async function gridFromPdf(buf: Buffer): Promise<Cell[][]> {
   if (!header) throw new ParseError("Could not find the column headers in this PDF. It needs date, merchant or description, and amount columns.");
 
   const anchors = new Map<string, { x: number; label: string }>();
-  const ignoredColumnX: number[] = [];
   for (let i = 0; i < header.length; i++) {
     if (isPdfIgnoredColumn(header[i].text)) {
-      ignoredColumnX.push(header[i].x);
       continue;
     }
     const single = pdfHeaderField(header[i].text);
     if (single && !anchors.has(single)) anchors.set(single, { x: header[i].x, label: header[i].text });
     if (i + 1 < header.length) {
       if (isPdfIgnoredColumn(`${header[i].text}${header[i + 1].text}`)) {
-        ignoredColumnX.push(header[i].x);
         continue;
       }
       const combined = pdfHeaderField(`${header[i].text}${header[i + 1].text}`);
@@ -245,7 +242,17 @@ async function gridFromPdf(buf: Buffer): Promise<Cell[][]> {
   }
 
   const fields = FIELD_ORDER.filter((field) => anchors.has(field)).sort((a, b) => anchors.get(a)!.x - anchors.get(b)!.x);
-  const lastDataX = Math.min(...ignoredColumnX, Number.POSITIVE_INFINITY);
+  const mappedXs = fields.map((field) => anchors.get(field)!.x);
+  const ignoredStarts: number[] = [];
+  for (let i = 0; i < header.length; i++) {
+    if (isPdfIgnoredColumn(header[i].text) || (i + 1 < header.length && isPdfIgnoredColumn(`${header[i].text}${header[i + 1].text}`))) {
+      ignoredStarts.push(header[i].x);
+    }
+  }
+  const ignoredRanges = ignoredStarts.map((start) => ({
+    start,
+    end: mappedXs.find((x) => x > start) ?? Number.POSITIVE_INFINITY,
+  }));
   const headerRow: Cell[] = FIELD_ORDER.map((field) => anchors.get(field)?.label ?? "");
   const output: Cell[][] = [headerRow];
   let hasTransaction = false;
@@ -253,7 +260,7 @@ async function gridFromPdf(buf: Buffer): Promise<Cell[][]> {
     if (line === header || isPdfHeaderLine(line)) continue;
     const cells = new Map<string, string[]>();
     for (const word of line) {
-      if (word.x >= lastDataX) continue;
+      if (ignoredRanges.some((range) => word.x >= range.start && word.x < range.end)) continue;
       let best: string | undefined = fields[0];
       for (let i = fields.length - 1; i >= 0; i--) {
         const field = fields[i];
