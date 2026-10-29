@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AuthFrame } from "@/components/auth-form";
+import { AuthFrame, PasswordField } from "@/components/auth-form";
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
 import { api, errorText } from "@/lib/client-api";
 
@@ -24,10 +24,14 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthFrame title="Sign in" sub="Use the account your administrator created for you.">
+    <AuthFrame
+      title="Sign in"
+      sub="Use the account your administrator created for you."
+      footer={<>Setting up for the first time? <a href="/setup" className="font-medium text-brand hover:underline">Create a workspace</a></>}
+    >
       <form onSubmit={submit} className="space-y-4">
         <Field label="Email"><Input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
-        <Field label="Password"><Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+        <PasswordField autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         {error && <ErrorNote>{error}</ErrorNote>}
         <Button type="submit" disabled={busy} className="w-full">{busy ? "Signing in…" : "Sign in"}</Button>
       </form>

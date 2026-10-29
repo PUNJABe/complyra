@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AuthFrame } from "@/components/auth-form";
+import { AuthFrame, PasswordField } from "@/components/auth-form";
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
 import { api, errorText } from "@/lib/client-api";
 
@@ -26,11 +26,15 @@ export default function SetupPage() {
   };
 
   return (
-    <AuthFrame title="Set up your workspace" sub="Create the administrator account and your first client. This screen only appears once.">
+    <AuthFrame
+      title="Set up your workspace"
+      sub="Create the administrator account and your first client. This screen only appears once."
+      footer={<>Already have an account? <a href="/login" className="font-medium text-brand hover:underline">Sign in</a></>}
+    >
       <form onSubmit={submit} className="space-y-4">
         <Field label="Your name"><Input required value={f.name} onChange={set("name")} autoComplete="name" /></Field>
         <Field label="Email"><Input type="email" required value={f.email} onChange={set("email")} autoComplete="username" /></Field>
-        <Field label="Password" hint="At least 10 characters with letters and numbers."><Input type="password" required value={f.password} onChange={set("password")} autoComplete="new-password" /></Field>
+        <PasswordField label="Password" hint="At least 10 characters with letters and numbers." value={f.password} onChange={set("password")} autoComplete="new-password" />
         <Field label="Company or client name"><Input required value={f.clientName} onChange={set("clientName")} /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="GSTIN (optional)"><Input value={f.gstin} onChange={set("gstin")} maxLength={15} className="font-mono" /></Field>
