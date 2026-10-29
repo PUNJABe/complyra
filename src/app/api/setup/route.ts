@@ -14,7 +14,7 @@ const schema = z.object({
   pan: z.string().trim().max(10).optional(),
 });
 
-export const GET = route({ public: true }, () => ({ needsSetup: !hasUsers() }));
+export const GET = route({ public: true }, async () => ({ needsSetup: !(await hasUsers()) }));
 
 export const POST = route({ public: true }, async ({ req, ip }) => {
   if (!hit(`setup:${ip}`, 10, 15 * 60_000).allowed) throw new HttpError(429, "Too many attempts. Try again later.");

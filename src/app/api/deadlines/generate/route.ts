@@ -17,7 +17,7 @@ export const POST = route({ roles: WRITE }, async ({ req, user, clientId, ip }) 
   const exists = db.prepare("SELECT 1 FROM deadlines WHERE client_id=? AND label=? AND due_date=?");
   const insert = db.prepare("INSERT INTO deadlines (id, client_id, kind, label, due_date, created_at) VALUES (?,?,?,?,?,?)");
   let added = 0;
-  db.transaction(() => {
+  await db.transaction(async () => {
     for (let i = 1; i <= months; i++) {
       const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + i, 1));
       const y = d.getUTCFullYear(), m = d.getUTCMonth();
@@ -28,12 +28,12 @@ export const POST = route({ roles: WRITE }, async ({ req, user, clientId, ip }) 
         ["GST", `GSTR-1 for ${prev} (standard date, verify)`, 11],
         ["GST", `GSTR-3B for ${prev} (standard date, verify)`, 20],
       ] as const) {
-        if (exists.get(clientId, label, ymd(day))) continue;
-        insert.run(newId(), clientId, kind, label, ymd(day), nowIso());
+        if (await exists.get(clientId, label, ymd(day))) continue;
+        await insert.run(newId(), clientId, kind, label, ymd(day), nowIso());
         added++;
       }
     }
-    audit({ actor: user.email, action: "deadlines_generated", resource: "deadlines", clientId, ip, details: `Added ${added} standard monthly reminders.` }, db);
-  })();
+    await audit({ actor: user.email, action: "deadlines_generated", resource: "deadlines", clientId, ip, details: `Added ${added} standard monthly reminders.` }, db);
+  });
   return { added };
 });

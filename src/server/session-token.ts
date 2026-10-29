@@ -14,6 +14,9 @@ function secret(): Buffer {
     if (fromEnv.length < 32) throw new Error("SESSION_SECRET must be at least 32 characters.");
     return (cachedSecret = Buffer.from(fromEnv));
   }
+  if (process.env.VERCEL || process.env.DATABASE_URL) {
+    throw new Error("SESSION_SECRET must be configured when using a hosted database.");
+  }
   // No env secret: create one once and keep it next to the database (mode 600).
   const file = path.join(dataDir(), ".session-secret");
   try {

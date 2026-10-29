@@ -39,14 +39,14 @@ function sameOrigin(req: Request): boolean {
   }
 }
 
-export function activeClientId(req: Request): string | null {
+export async function activeClientId(req: Request): Promise<string | null> {
   const db = getDb();
   const wanted = readCookie(req, CLIENT_COOKIE);
   if (wanted) {
-    const hit = db.prepare("SELECT id FROM clients WHERE id = ?").get(wanted) as { id: string } | undefined;
+    const hit = (await db.prepare("SELECT id FROM clients WHERE id = ?").get(wanted)) as { id: string } | undefined;
     if (hit) return hit.id;
   }
-  const first = db.prepare("SELECT id FROM clients ORDER BY created_at ASC LIMIT 1").get() as { id: string } | undefined;
+  const first = (await db.prepare("SELECT id FROM clients ORDER BY created_at ASC LIMIT 1").get()) as { id: string } | undefined;
   return first?.id ?? null;
 }
 
@@ -57,7 +57,7 @@ export function route(opts: Options, handler: (ctx: Ctx) => Promise<unknown> | u
 
       let user: SessionUser | null = null;
       if (!opts.public) {
-        user = getSessionUser(req);
+        user = await getSessionUser(req);
         if (!user) throw new HttpError(401, "Sign in required.", "unauthenticated");
         if (opts.roles && !opts.roles.includes(user.role)) {
           throw new HttpError(403, "Your role does not allow this action.", "forbidden");
@@ -66,7 +66,7 @@ export function route(opts: Options, handler: (ctx: Ctx) => Promise<unknown> | u
 
       let clientId = "";
       if (!opts.noClient && !opts.public) {
-        const id = activeClientId(req);
+        const id = await activeClientId(req);
         if (!id) throw new HttpError(409, "Create a client first.", "no_client");
         clientId = id;
       }

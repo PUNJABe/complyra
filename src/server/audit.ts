@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type Database from "better-sqlite3";
+import type { DatabaseLike } from "./db";
 import { getDb, nowIso } from "./db";
 
 /**
@@ -37,53 +37,51 @@ export function hashEntry(prevHash: string, e: Hashable): string {
     .digest("hex");
 }
 
-export function audit(entry: AuditEntry, db: Database.Database = getDb()): void {
-  db.transaction(() => {
-    const prev = db.prepare("SELECT hash FROM audit_log ORDER BY seq DESC LIMIT 1").get() as { hash: string } | undefined;
-    const prevHash = prev?.hash ?? GENESIS;
-    const row: Hashable = {
-      ts: nowIso(),
-      actor: entry.actor,
-      action: entry.action,
-      resource: entry.resource ?? "",
-      details: entry.details.slice(0, 2000),
-      severity: entry.severity ?? "info",
-      ip: entry.ip ?? "",
-      client_id: entry.clientId ?? null,
-    };
-    const hash = hashEntry(prevHash, row);
-    db.prepare(
-      `INSERT INTO audit_log (ts, actor, action, resource, details, severity, ip, client_id, prev_hash, hash)
-       VALUES (@ts, @actor, @action, @resource, @details, @severity, @ip, @client_id, @prev_hash, @hash)`,
-    ).run({ ...row, prev_hash: prevHash, hash });
-  })();
+export async function audit(entry: AuditEntry, db: DatabaseLike = getDb()): Promise<void> {
+  const prev = (await db.prepare("SELECT hash FROM audit_log ORDER BY seq DESC LIMIT 1").get()) as { hash: string } | undefined;
+  const prevHash = prev?.hash ?? GENESIS;
+  const row: Hashable = {
+    ts: nowIso(),
+    actor: entry.actor,
+    action: entry.action,
+    resource: entry.resource ?? "",
+    details: entry.details.slice(0, 2000),
+    severity: entry.severity ?? "info",
+    ip: entry.ip ?? "",
+    client_id: entry.clientId ?? null,
+  };
+  const hash = hashEntry(prevHash, row);
+  await db.prepare(
+    `INSERT INTO audit_log (ts, actor, action, resource, details, severity, ip, client_id, prev_hash, hash)
+     VALUES (@ts, @actor, @action, @resource, @details, @severity, @ip, @client_id, @prev_hash, @hash)`,
+  ).run({ ...row, prev_hash: prevHash, hash });
 }
 
 export type AuditRow = Hashable & { seq: number; prev_hash: string; hash: string };
 
-export function listAudit(
+export async function listAudit(
   opts: { limit?: number; beforeSeq?: number; clientId?: string | null; action?: string } = {},
-  db: Database.Database = getDb(),
-): AuditRow[] {
+  db: DatabaseLike = getDb(),
+): Promise<AuditRow[]> {
   const where: string[] = [];
   const args: Record<string, unknown> = {};
   if (opts.beforeSeq) { where.push("seq < @beforeSeq"); args.beforeSeq = opts.beforeSeq; }
   if (opts.clientId) { where.push("(client_id = @clientId OR client_id IS NULL)"); args.clientId = opts.clientId; }
   if (opts.action) { where.push("action = @action"); args.action = opts.action; }
   args.limit = Math.min(opts.limit ?? 50, 500);
-  return db
+  return (await db
     .prepare(`SELECT * FROM audit_log ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY seq DESC LIMIT @limit`)
-    .all(args) as AuditRow[];
+    .all(args)) as AuditRow[];
 }
 
 export type VerifyResult =
   | { ok: true; entries: number; head: string }
   | { ok: false; entries: number; brokenAtSeq: number; reason: string };
 
-export function verifyAudit(db: Database.Database = getDb()): VerifyResult {
+export async function verifyAudit(db: DatabaseLike = getDb()): Promise<VerifyResult> {
   let prev = GENESIS;
   let count = 0;
-  const rows = db.prepare("SELECT * FROM audit_log ORDER BY seq ASC").iterate() as IterableIterator<AuditRow>;
+  const rows = (await db.prepare("SELECT * FROM audit_log ORDER BY seq ASC").all()) as AuditRow[];
   for (const row of rows) {
     count++;
     if (row.prev_hash !== prev) {

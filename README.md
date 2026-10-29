@@ -58,10 +58,12 @@ Roles are checked on the server for every request, against the database, so a ro
 
 ## Deploying
 
-Data lives in SQLite under `./data` (override with `COMPLYRA_DATA_DIR`). Back that folder up. It means:
+By default data lives in SQLite under `./data` (override with `COMPLYRA_DATA_DIR`). When
+`DATABASE_URL` is set, the app uses PostgreSQL (including Neon) with an async driver instead.
+Set a stable `SESSION_SECRET` (32+ characters) in hosted deployments. Back up your database. It means:
 
 - It suits a single server or a small VM, with a persistent disk. Put it behind HTTPS (Caddy, nginx) and set `TRUST_PROXY=1` so the audit log records client IPs.
-- On Vercel, the app uses `/tmp` so the serverless function can start, but that storage is ephemeral and not suitable for real accounts or compliance data. For a durable deployment, replace `src/server/db.ts` with a hosted Postgres/SQLite-compatible database.
+- On Vercel, set `DATABASE_URL` to Neon and `SESSION_SECRET` to a stable secret. No SQLite files are used in that mode, so workspace creation and login persist across serverless instances.
 - Run one instance. Sign-in rate limiting and the notification retry loop are in-process.
 
 ## Honest limitations

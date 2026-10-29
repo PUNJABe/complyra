@@ -76,10 +76,10 @@ export function isSecureRequest(req: Request): boolean {
 }
 
 /** Resolves the signed session to a *current* DB user. Role and active flag come from the DB, never from the cookie. */
-export function getSessionUser(req: Request): SessionUser | null {
+export async function getSessionUser(req: Request): Promise<SessionUser | null> {
   const session = verifySessionToken(readCookie(req, SESSION_COOKIE));
   if (!session) return null;
-  const row = getDb()
+  const row = await getDb()
     .prepare("SELECT id, email, name, role, active FROM users WHERE id = ?")
     .get(session.uid) as (SessionUser & { active: number }) | undefined;
   if (!row || !row.active) return null;

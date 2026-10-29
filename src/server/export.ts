@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import Papa from "papaparse";
-import type Database from "better-sqlite3";
+import type { DatabaseLike } from "./db";
 import { audit, verifyAudit } from "./audit";
 import { getDb } from "./db";
 import { dashboardStats } from "./stats";
@@ -19,12 +19,12 @@ export function safeCell(v: unknown): string | number {
 
 const SEV_ORDER = "CASE severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END";
 
-function findingRows(clientId: string, db: Database.Database) {
-  return db.prepare(`SELECT * FROM findings WHERE client_id = ? ORDER BY ${SEV_ORDER}, amount_paise DESC`).all(clientId) as FindingRow[];
+async function findingRows(clientId: string, db: DatabaseLike) {
+  return (await db.prepare(`SELECT * FROM findings WHERE client_id = ? ORDER BY ${SEV_ORDER}, amount_paise DESC`).all(clientId)) as FindingRow[];
 }
 
-export function findingsCsv(clientId: string, db: Database.Database = getDb()): string {
-  const rows = findingRows(clientId, db).map((f) => ({
+export async function findingsCsv(clientId: string, db: DatabaseLike = getDb()): Promise<string> {
+  const rows = (await findingRows(clientId, db)).map((f) => ({
     Status: f.status, Severity: f.severity, Rule: f.rule_name, Finding: f.title, Why: f.why, Evidence: f.evidence,
     "Amount at issue": f.amount_paise / 100, Transactions: (JSON.parse(f.txn_ids_json) as string[]).length,
     "First seen": f.first_seen_at.slice(0, 10), "Reviewed by": f.reviewed_by ?? "", "Reviewed on": f.reviewed_at?.slice(0, 10) ?? "", "Review note": f.review_note ?? "",
@@ -43,10 +43,10 @@ function styleHeader(ws: ExcelJS.Worksheet) {
   ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columnCount } };
 }
 
-export async function reportXlsx(clientId: string, generatedBy: string, db: Database.Database = getDb()): Promise<Buffer> {
-  const client = db.prepare("SELECT * FROM clients WHERE id = ?").get(clientId) as { name: string; gstin: string; pan: string; currency: string };
-  const stats = dashboardStats(clientId, db);
-  const chain = verifyAudit(db);
+export async function reportXlsx(clientId: string, generatedBy: string, db: DatabaseLike = getDb()): Promise<Buffer> {
+  const client = (await db.prepare("SELECT * FROM clients WHERE id = ?").get(clientId)) as { name: string; gstin: string; pan: string; currency: string };
+  const stats = await dashboardStats(clientId, db);
+  const chain = await verifyAudit(db);
   const wb = new ExcelJS.Workbook();
   wb.creator = "Complyra";
   wb.created = new Date();
@@ -75,13 +75,13 @@ export async function reportXlsx(clientId: string, generatedBy: string, db: Data
     { header: "Why", width: 70 }, { header: "Evidence", width: 50 }, { header: "Amount at issue", width: 16, style: { numFmt: "#,##0.00" } },
     { header: "Reviewed by", width: 24 }, { header: "Reviewed on", width: 12 }, { header: "Review note", width: 50 },
   ];
-  findingRows(clientId, db).forEach((x) =>
+  (await findingRows(clientId, db)).forEach((x) =>
     f.addRow([x.status, x.severity, x.rule_name, x.title, x.why, x.evidence, x.amount_paise / 100, x.reviewed_by ?? "", x.reviewed_at?.slice(0, 10) ?? "", x.review_note ?? ""]),
   );
   styleHeader(f);
 
   const flagMap = new Map<string, string[]>();
-  for (const x of findingRows(clientId, db).filter((r) => r.status === "open" || r.status === "escalated" || r.status === "confirmed")) {
+  for (const x of (await findingRows(clientId, db)).filter((r) => r.status === "open" || r.status === "escalated" || r.status === "confirmed")) {
     if (x.rule_name && JSON.parse(x.txn_ids_json).length <= 50) for (const id of JSON.parse(x.txn_ids_json) as string[]) flagMap.set(id, [...(flagMap.get(id) ?? []), x.rule_name]);
   }
   const t = wb.addWorksheet("Transactions");
@@ -90,7 +90,7 @@ export async function reportXlsx(clientId: string, generatedBy: string, db: Data
     { header: "Employee", width: 20 }, { header: "Department", width: 16 }, { header: "Category", width: 22 }, { header: "Invoice no.", width: 16 },
     { header: "Vendor GSTIN", width: 18 }, { header: "Reference", width: 30 }, { header: "Flagged by", width: 40 },
   ];
-  const txns = db.prepare("SELECT * FROM transactions WHERE client_id = ? ORDER BY txn_date, merchant").all(clientId) as {
+  const txns = (await db.prepare("SELECT * FROM transactions WHERE client_id = ? ORDER BY txn_date, merchant").all(clientId)) as {
     id: string; row_hash: string; txn_date: string; merchant: string; amount_paise: number; direction: string; employee: string; department: string; category: string; invoice_no: string; vendor_gstin: string; reference: string;
   }[];
   for (const x of txns) t.addRow([x.row_hash, x.txn_date, x.merchant, x.amount_paise / 100, x.direction, x.employee, x.department, x.category, x.invoice_no, x.vendor_gstin, x.reference, (flagMap.get(x.id) ?? []).join("; ")]);
@@ -98,11 +98,11 @@ export async function reportXlsx(clientId: string, generatedBy: string, db: Data
 
   const r = wb.addWorksheet("Policy rules");
   r.columns = [{ header: "Rule", width: 36 }, { header: "Type", width: 24 }, { header: "Severity", width: 10 }, { header: "Enabled", width: 9 }, { header: "Settings", width: 80 }];
-  for (const x of db.prepare("SELECT * FROM rules WHERE client_id = ? ORDER BY created_at").all(clientId) as { name: string; kind: string; severity: string; enabled: number; params_json: string }[]) {
+  for (const x of (await db.prepare("SELECT * FROM rules WHERE client_id = ? ORDER BY created_at").all(clientId)) as { name: string; kind: string; severity: string; enabled: number; params_json: string }[]) {
     r.addRow([x.name, x.kind, x.severity, x.enabled ? "Yes" : "No", x.params_json]);
   }
   styleHeader(r);
 
-  audit({ actor: generatedBy, action: "report_exported", resource: "report.xlsx", clientId, details: `Full report exported (${txns.length} transactions).` }, db);
+  await audit({ actor: generatedBy, action: "report_exported", resource: "report.xlsx", clientId, details: `Full report exported (${txns.length} transactions).` }, db);
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type Database from "better-sqlite3";
+import type { DatabaseLike } from "./db";
 import { audit } from "./audit";
 import { getDb, newId, nowIso } from "./db";
 import { MAX_FILE_BYTES, ParseError, parseStatement, type ParseOptions } from "./parser";
@@ -26,7 +26,7 @@ export type ImportResult = {
  */
 export async function importStatement(args: {
   clientId: string; buffer: Buffer; filename: string; actor: string; opts: ParseOptions; ip?: string;
-}, db: Database.Database = getDb()): Promise<ImportResult> {
+}, db: DatabaseLike = getDb()): Promise<ImportResult> {
   const { clientId, buffer, filename, actor, opts } = args;
   if (buffer.length === 0) throw new ParseError("The file is empty.");
   if (buffer.length > MAX_FILE_BYTES) throw new ParseError("File is larger than 5 MB. Split it and import in parts.");
@@ -43,8 +43,8 @@ export async function importStatement(args: {
   let imported = 0;
   let duplicates = 0;
 
-  db.transaction(() => {
-    db.prepare(
+  await db.transaction(async () => {
+    await db.prepare(
       `INSERT INTO imports (id, client_id, filename, file_sha256, rows_total, rows_imported, rows_duplicate, rows_rejected, errors_json, created_by, created_at)
        VALUES (?,?,?,?,?,0,0,?,?,?,?)`,
     ).run(importId, clientId, filename.slice(0, 200), createHash("sha256").update(buffer).digest("hex"), parsed.totalRows, parsed.rejected.length, JSON.stringify(parsed.rejected.slice(0, 100)), actor, now);
@@ -59,7 +59,7 @@ export async function importStatement(args: {
       const base = [r.date, r.merchantNorm, r.amountPaise, r.direction, r.employee.toLowerCase(), r.reference.toLowerCase(), r.invoiceNo.toLowerCase()].join("|");
       const n = (seen.get(base) ?? 0) + 1;
       seen.set(base, n);
-      const res = insert.run({
+      const res = await insert.run({
         id: newId(), client_id: clientId, import_id: importId, row_hash: transactionHash(r, n),
         txn_date: r.date, merchant: r.merchant, merchant_norm: r.merchantNorm, amount_paise: r.amountPaise, direction: r.direction,
         employee: r.employee, department: r.department, category: r.category, invoice_no: r.invoiceNo, vendor_gstin: r.vendorGstin,
@@ -68,14 +68,14 @@ export async function importStatement(args: {
       if (res.changes) imported++; else duplicates++;
     }
 
-    db.prepare("UPDATE imports SET rows_imported = ?, rows_duplicate = ? WHERE id = ?").run(imported, duplicates, importId);
-    audit({
+    await db.prepare("UPDATE imports SET rows_imported = ?, rows_duplicate = ? WHERE id = ?").run(imported, duplicates, importId);
+    await audit({
       actor, action: "import_statement", resource: filename.slice(0, 120), clientId, ip: args.ip,
       details: `Imported ${imported} transactions from ${filename}; ${duplicates} already on file, ${parsed.rejected.length} rejected.`,
     }, db);
-  })();
+  });
 
-  const analysis = runAnalysis(clientId, actor, db);
+  const analysis = await runAnalysis(clientId, actor, db);
   return {
     importId, filename, rowsTotal: parsed.totalRows, imported, duplicates, rejected: parsed.rejected.length,
     credits: parsed.rows.filter((r) => r.direction === "credit").length,
@@ -83,12 +83,12 @@ export async function importStatement(args: {
   };
 }
 
-export function deleteImport(importId: string, clientId: string, actor: string, db: Database.Database = getDb()): AnalysisSummary | null {
-  const row = db.prepare("SELECT filename, rows_imported FROM imports WHERE id = ? AND client_id = ?").get(importId, clientId) as { filename: string; rows_imported: number } | undefined;
+export async function deleteImport(importId: string, clientId: string, actor: string, db: DatabaseLike = getDb()): Promise<AnalysisSummary | null> {
+  const row = (await db.prepare("SELECT filename, rows_imported FROM imports WHERE id = ? AND client_id = ?").get(importId, clientId)) as { filename: string; rows_imported: number } | undefined;
   if (!row) return null;
-  db.transaction(() => {
-    db.prepare("DELETE FROM imports WHERE id = ?").run(importId); // cascades to its transactions
-    audit({ actor, action: "import_deleted", resource: row.filename, clientId, severity: "warning", details: `Removed import ${row.filename} (${row.rows_imported} transactions).` }, db);
-  })();
+  await db.transaction(async () => {
+    await db.prepare("DELETE FROM imports WHERE id = ?").run(importId); // cascades to its transactions
+    await audit({ actor, action: "import_deleted", resource: row.filename, clientId, severity: "warning", details: `Removed import ${row.filename} (${row.rows_imported} transactions).` }, db);
+  });
   return runAnalysis(clientId, actor, db);
 }

@@ -22,6 +22,6 @@ export const POST = route({ roles: WRITE }, async ({ req, user, clientId, ip }) 
     const p = ruleInputSchema.safeParse(r);
     if (p.success) rules.push(p.data); else rejected.push({ index, reason: p.error.issues[0]?.message ?? "Invalid rule" });
   });
-  audit({ actor: user.email, action: "rules_drafted_by_ai", resource: "rules", clientId, ip, details: `AI drafted ${rules.length} rule(s) from policy text; ${rejected.length} discarded as invalid.` });
+  await audit({ actor: user.email, action: "rules_drafted_by_ai", resource: "rules", clientId, ip, details: `AI drafted ${rules.length} rule(s) from policy text; ${rejected.length} discarded as invalid.` });
   return { rules, rejected };
 });

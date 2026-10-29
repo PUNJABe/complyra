@@ -4,8 +4,8 @@ import { importStatement } from "@/server/imports";
 import { ParseError } from "@/server/parser";
 import { notifyNewHighFindings, processOutbox } from "@/server/notify";
 
-export const GET = route({}, ({ clientId }) =>
-  getDb().prepare("SELECT id, filename, rows_total, rows_imported, rows_duplicate, rows_rejected, errors_json, created_by, created_at FROM imports WHERE client_id = ? ORDER BY created_at DESC LIMIT 100").all(clientId),
+export const GET = route({}, async ({ clientId }) =>
+  await getDb().prepare("SELECT id, filename, rows_total, rows_imported, rows_duplicate, rows_rejected, errors_json, created_by, created_at FROM imports WHERE client_id = ? ORDER BY created_at DESC LIMIT 100").all(clientId),
 );
 
 export const POST = route({ roles: WRITE }, async ({ req, user, clientId, ip }) => {
@@ -17,9 +17,9 @@ export const POST = route({ roles: WRITE }, async ({ req, user, clientId, ip }) 
   try {
     const result = await importStatement({ clientId, buffer: Buffer.from(await file.arrayBuffer()), filename: file.name, actor: user.email, opts, ip });
     const db = getDb();
-    const client = db.prepare("SELECT name, currency FROM clients WHERE id = ?").get(clientId) as { name: string; currency: string };
-    notifyNewHighFindings(clientId, client.name, client.currency, result.analysis.newHigh, db);
-    void processOutbox(db);
+    const client = (await db.prepare("SELECT name, currency FROM clients WHERE id = ?").get(clientId)) as { name: string; currency: string };
+    await notifyNewHighFindings(clientId, client.name, client.currency, result.analysis.newHigh, db);
+    void await processOutbox(db);
     return result;
   } catch (e) {
     if (e instanceof ParseError) throw new HttpError(400, e.message);

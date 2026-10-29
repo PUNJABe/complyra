@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type Database from "better-sqlite3";
+import type { DatabaseLike } from "./db";
 import { evaluate, type EngineTxn, type Skipped } from "@/lib/engine";
 import { ruleInputSchema, type StoredRule } from "@/lib/rules";
 import { audit } from "./audit";
@@ -11,8 +11,8 @@ type TxnRow = {
   employee: string; department: string; category: string; invoice_no: string; vendor_gstin: string; reference: string;
 };
 
-export function loadRules(clientId: string, db: Database.Database = getDb()): { rules: StoredRule[]; invalid: Skipped[] } {
-  const rows = db.prepare("SELECT * FROM rules WHERE client_id = ? ORDER BY created_at ASC").all(clientId) as RuleRow[];
+export async function loadRules(clientId: string, db: DatabaseLike = getDb()): Promise<{ rules: StoredRule[]; invalid: Skipped[] }> {
+  const rows = (await db.prepare("SELECT * FROM rules WHERE client_id = ? ORDER BY created_at ASC").all(clientId)) as RuleRow[];
   const rules: StoredRule[] = [];
   const invalid: Skipped[] = [];
   for (const r of rows) {
@@ -29,8 +29,8 @@ export function loadRules(clientId: string, db: Database.Database = getDb()): { 
   return { rules, invalid };
 }
 
-export function loadTxns(clientId: string, db: Database.Database = getDb()): EngineTxn[] {
-  const rows = db.prepare("SELECT * FROM transactions WHERE client_id = ?").all(clientId) as TxnRow[];
+export async function loadTxns(clientId: string, db: DatabaseLike = getDb()): Promise<EngineTxn[]> {
+  const rows = (await db.prepare("SELECT * FROM transactions WHERE client_id = ?").all(clientId)) as TxnRow[];
   return rows.map((r) => ({
     id: r.id, date: r.txn_date, merchant: r.merchant, merchantNorm: r.merchant_norm, amountPaise: r.amount_paise,
     direction: r.direction, employee: r.employee, department: r.department, category: r.category,
@@ -58,10 +58,10 @@ export type AnalysisSummary = {
  *  - open issue now gone  → removed (rule edited/deleted, or the import was removed)
  *  - reviewed issue gone  → kept, so the audit trail of decisions is never lost
  */
-export function runAnalysis(clientId: string, actor: string, db: Database.Database = getDb()): AnalysisSummary {
-  const client = db.prepare("SELECT currency FROM clients WHERE id = ?").get(clientId) as { currency: string } | undefined;
-  const txns = loadTxns(clientId, db);
-  const { rules, invalid } = loadRules(clientId, db);
+export async function runAnalysis(clientId: string, actor: string, db: DatabaseLike = getDb()): Promise<AnalysisSummary> {
+  const client = (await db.prepare("SELECT currency FROM clients WHERE id = ?").get(clientId)) as { currency: string } | undefined;
+  const txns = await loadTxns(clientId, db);
+  const { rules, invalid } = await loadRules(clientId, db);
   const { detections, skipped } = evaluate(rules, txns, { currency: client?.currency ?? "INR" });
   const now = nowIso();
 
@@ -70,8 +70,8 @@ export function runAnalysis(clientId: string, actor: string, db: Database.Databa
     skipped: [...invalid, ...skipped], newHigh: [],
   };
 
-  db.transaction(() => {
-    const existing = db.prepare("SELECT id, fingerprint, status FROM findings WHERE client_id = ?").all(clientId) as { id: string; fingerprint: string; status: string }[];
+  await db.transaction(async () => {
+    const existing = (await db.prepare("SELECT id, fingerprint, status FROM findings WHERE client_id = ?").all(clientId)) as { id: string; fingerprint: string; status: string }[];
     const byFp = new Map(existing.map((e) => [e.fingerprint, e]));
     const seen = new Set<string>();
 
@@ -93,10 +93,10 @@ export function runAnalysis(clientId: string, actor: string, db: Database.Databa
       };
       const hit = byFp.get(fp);
       if (hit) {
-        update.run({ ...common, id: hit.id });
+        await update.run({ ...common, id: hit.id });
         summary.updated++;
       } else {
-        insert.run({ ...common, id: newId(), client_id: clientId, fingerprint: fp });
+        await insert.run({ ...common, id: newId(), client_id: clientId, fingerprint: fp });
         summary.created++;
         if (d.severity === "high") summary.newHigh.push({ title: d.title, why: d.why, amountPaise: d.amountPaise });
       }
@@ -105,21 +105,21 @@ export function runAnalysis(clientId: string, actor: string, db: Database.Databa
     const del = db.prepare("DELETE FROM findings WHERE id = ?");
     for (const e of existing) {
       if (!seen.has(e.fingerprint) && e.status === "open") {
-        del.run(e.id);
+        await del.run(e.id);
         summary.removed++;
       }
     }
 
-    db.prepare(
+    await db.prepare(
       `INSERT INTO analysis_runs (client_id, ran_at, txn_count, detections, skipped_json) VALUES (?,?,?,?,?)
        ON CONFLICT(client_id) DO UPDATE SET ran_at=excluded.ran_at, txn_count=excluded.txn_count, detections=excluded.detections, skipped_json=excluded.skipped_json`,
     ).run(clientId, now, txns.length, detections.length, JSON.stringify(summary.skipped));
 
-    audit({
+    await audit({
       actor, action: "analysis_run", resource: "findings", clientId,
       details: `Checked ${txns.length} transactions: ${summary.created} new, ${summary.updated} unchanged, ${summary.removed} cleared findings.`,
     }, db);
-  })();
+  });
 
   return summary;
 }

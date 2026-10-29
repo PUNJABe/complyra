@@ -13,10 +13,10 @@ export const POST = route({}, async ({ req, user, clientId }) => {
   if (!hit(`ask:${user.id}`, 15, 60_000).allowed) throw new HttpError(429, "Slow down: too many questions.");
   const { question } = z.object({ question: z.string().trim().min(3).max(500) }).parse(await jsonBody(req));
   const db = getDb();
-  const cur = (db.prepare("SELECT currency FROM clients WHERE id=?").get(clientId) as { currency: string }).currency;
-  const s = dashboardStats(clientId, db);
+  const cur = ((await db.prepare("SELECT currency FROM clients WHERE id=?").get(clientId)) as { currency: string }).currency;
+  const s = await dashboardStats(clientId, db);
   const m = (p: number) => formatMoney(p, cur);
-  const top = db.prepare("SELECT severity, title, why, amount_paise, status FROM findings WHERE client_id=? AND status IN ('open','escalated') ORDER BY CASE severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, amount_paise DESC LIMIT 25").all(clientId) as { severity: string; title: string; why: string; amount_paise: number; status: string }[];
+  const top = (await db.prepare("SELECT severity, title, why, amount_paise, status FROM findings WHERE client_id=? AND status IN ('open','escalated') ORDER BY CASE severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, amount_paise DESC LIMIT 25").all(clientId)) as { severity: string; title: string; why: string; amount_paise: number; status: string }[];
   const data = [
     `Period: ${s.totals.firstDate ?? "n/a"} to ${s.totals.lastDate ?? "n/a"}`,
     `Total spend: ${m(s.totals.spendPaise)} across ${s.totals.debitCount} transactions; refunds/credits: ${m(s.totals.creditPaise)}`,
