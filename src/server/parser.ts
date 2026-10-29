@@ -198,7 +198,11 @@ function isPdfHeaderLine(line: PdfLine): boolean {
 async function gridFromPdf(buf: Buffer): Promise<Cell[][]> {
   let pdf: Awaited<ReturnType<typeof getDocument>["promise"]>;
   try {
-    pdf = await getDocument({ data: new Uint8Array(buf) }).promise;
+    pdf = await getDocument({
+      data: new Uint8Array(buf),
+      useWasm: false,
+      useWorkerFetch: false,
+    }).promise;
   } catch {
     throw new ParseError("Could not read this PDF. The file may be invalid or image-only; upload a valid, text-based statement.");
   }
