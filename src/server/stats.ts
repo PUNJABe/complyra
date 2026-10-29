@@ -15,7 +15,7 @@ export async function dashboardStats(clientId: string, db: DatabaseLike = getDb(
      FROM transactions WHERE client_id = ?`, clientId);
 
   const byMonth = await all<{ month: string; paise: number }>(
-    `SELECT substr(txn_date,1,7) month, SUM(amount_paise) paise FROM transactions
+    `SELECT substr(txn_date,1,7) AS "month", SUM(amount_paise) paise FROM transactions
      WHERE client_id = ? AND direction='debit' GROUP BY 1 ORDER BY 1`, clientId);
 
   const group = async (col: "category" | "department", empty: string) =>
