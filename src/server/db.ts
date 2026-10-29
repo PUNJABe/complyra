@@ -101,7 +101,10 @@ class PostgresAdapter implements DatabaseLike {
   }
   async transaction<T>(fn: () => Promise<T>): Promise<T> {
     await this.ready;
-    return this.sql.begin(async () => fn()) as Promise<T>;
+    // Queries are issued through the shared client. Starting a separate
+    // transaction here would reserve the only pooled connection and make
+    // nested prepared statements wait forever.
+    return fn();
   }
   exec(query: string): void {
     void query;
