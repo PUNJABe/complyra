@@ -19,7 +19,12 @@ export default function LoginPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true); setError("");
-    try { await api("/api/auth/login", { method: "POST", json: { email, password } }); router.push("/dashboard"); router.refresh(); }
+    try {
+      await api("/api/auth/login", { method: "POST", json: { email, password } });
+      await api("/api/auth/session");
+      router.push("/dashboard");
+      router.refresh();
+    }
     catch (err) { setError(errorText(err)); setBusy(false); }
   };
 
