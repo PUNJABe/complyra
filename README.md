@@ -61,7 +61,7 @@ Roles are checked on the server for every request, against the database, so a ro
 Data lives in SQLite under `./data` (override with `COMPLYRA_DATA_DIR`). Back that folder up. It means:
 
 - It suits a single server or a small VM, with a persistent disk. Put it behind HTTPS (Caddy, nginx) and set `TRUST_PROXY=1` so the audit log records client IPs.
-- It will **not** work on serverless hosts such as Vercel, whose filesystems are read-only or ephemeral. To go there, replace `src/server/db.ts` with Postgres.
+- On Vercel, the app uses `/tmp` so the serverless function can start, but that storage is ephemeral and not suitable for real accounts or compliance data. For a durable deployment, replace `src/server/db.ts` with a hosted Postgres/SQLite-compatible database.
 - Run one instance. Sign-in rate limiting and the notification retry loop are in-process.
 
 ## Honest limitations
