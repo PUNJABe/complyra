@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { BookCheck, CalendarClock, FileUp, Gauge, LogOut, Menu, Moon, ScrollText, Settings, ShieldAlert, Sun, TableProperties } from "lucide-react";
+import { BookCheck, CalendarClock, FileUp, Gauge, LogOut, Menu, Moon, ScrollText, Settings, ShieldAlert, ShieldCheck, Sun, TableProperties } from "lucide-react";
 import { api, useApi, errorText } from "@/lib/client-api";
 import { canWrite, SessionContext, type SessionData } from "./session";
 import { Loading, ErrorNote, Select } from "./ui";
@@ -50,7 +50,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         const active = href === "/dashboard" ? path === href : path.startsWith(href);
         return (
           <Link key={href} href={href} onClick={() => setOpen(false)} aria-current={active ? "page" : undefined}
-            className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm ${active ? "bg-brand-soft font-semibold text-brand" : "text-muted hover:bg-sunken hover:text-ink"}`}>
+            className={`flex min-h-10 items-center gap-2.5 rounded-lg border-l-2 px-3 py-2 text-sm transition-colors ${active ? "border-brand bg-brand-soft font-semibold text-brand" : "border-transparent text-muted hover:bg-sunken hover:text-ink"}`}>
             <Icon size={16} aria-hidden /> {label}
           </Link>
         );
@@ -60,14 +60,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <SessionContext.Provider value={{ ...data, reload }}>
-      <div className="min-h-screen lg:grid lg:grid-cols-[232px_1fr]">
-        <header className="flex items-center justify-between border-b border-line bg-surface px-4 py-3 lg:hidden">
-          <span className="font-semibold">Complyra</span>
-          <button onClick={() => setOpen((o) => !o)} aria-label="Menu" aria-expanded={open} className="rounded-md p-1.5 hover:bg-sunken"><Menu size={20} /></button>
+      <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
+        <header className="flex items-center justify-between border-b border-line bg-surface px-4 py-3 shadow-sm lg:hidden">
+          <span className="flex items-center gap-2 font-semibold tracking-tight"><span className="grid size-8 place-items-center rounded-lg bg-brand text-brand-ink"><ShieldCheck size={17} /></span>Complyra</span>
+          <button onClick={() => setOpen((o) => !o)} aria-label="Menu" aria-expanded={open} className="grid size-9 place-items-center rounded-lg text-muted transition hover:bg-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"><Menu size={20} /></button>
         </header>
-        <aside className={`${open ? "block" : "hidden"} border-r border-line bg-surface p-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:justify-between`}>
+        <aside className={`${open ? "block" : "hidden"} border-r border-line bg-surface p-4 shadow-sm lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:justify-between`}>
           <div className="space-y-5">
-            <div className="hidden px-3 text-lg font-semibold tracking-tight lg:block">Complyra</div>
+            <div className="hidden items-center gap-2 px-3 lg:flex">
+              <span className="grid size-9 place-items-center rounded-xl bg-brand text-brand-ink shadow-sm"><ShieldCheck size={19} /></span>
+              <div><p className="text-base font-semibold tracking-tight">Complyra</p><p className="text-[11px] text-muted">Compliance workspace</p></div>
+            </div>
             {data.clients.length > 0 && (
               <label className="block px-1">
                 <span className="mb-1 block px-2 text-xs text-muted">Client</span>
@@ -84,10 +87,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <p className="truncate text-xs text-muted">{data.user.email} · {data.user.role}</p>
             </div>
             <div className="flex gap-1">
-              <button onClick={toggleTheme} className="flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-muted hover:bg-sunken hover:text-ink" aria-label="Toggle dark mode">
+              <button onClick={toggleTheme} className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-muted transition hover:bg-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40" aria-label="Toggle dark mode">
                 <Sun size={15} className="hidden dark:block" /><Moon size={15} /> Theme
               </button>
-              <button onClick={logout} className="flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-muted hover:bg-sunken hover:text-ink"><LogOut size={15} /> Sign out</button>
+              <button onClick={logout} className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-muted transition hover:bg-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"><LogOut size={15} /> Sign out</button>
             </div>
           </div>
         </aside>

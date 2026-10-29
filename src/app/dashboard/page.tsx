@@ -1,11 +1,11 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Download, RefreshCw } from "lucide-react";
+import { ArrowRight, BadgeCheck, CircleDollarSign, Download, FileUp, RefreshCw, ShieldAlert, TriangleAlert } from "lucide-react";
 import { api, errorText, useApi } from "@/lib/client-api";
 import { formatMoneyCompact } from "@/lib/money";
 import { canWrite, useMoney, useSession } from "@/components/session";
-import { Button, Empty, ErrorNote, Input, Loading, PageHeader } from "@/components/ui";
+import { Button, ErrorNote, Input, Loading, PageHeader } from "@/components/ui";
 import { useToast } from "@/components/toast";
 
 type Stats = {
@@ -22,12 +22,17 @@ type Deadline = { id: string; label: string; dueDate: string; done: boolean; ove
 
 const MONTH = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString("en-IN", { month: "short", year: "2-digit", timeZone: "UTC" });
 
-function Figure({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
+function Figure({ label, value, sub, tone, icon: Icon, iconTone }: { label: string; value: string; sub?: string; tone?: string; icon: React.ComponentType<{ size?: number; className?: string }>; iconTone: string }) {
   return (
-    <div className="px-5 py-4 first:pl-0">
-      <p className="text-sm text-muted">{label}</p>
-      <p className={`mt-1 text-3xl font-semibold tabular-nums tracking-tight ${tone ?? ""}`}>{value}</p>
-      {sub && <p className="mt-1 text-xs text-muted">{sub}</p>}
+    <div className="rounded-xl border border-line bg-surface p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-muted">{label}</p>
+          <p className={`mt-2 text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl ${tone ?? ""}`}>{value}</p>
+        </div>
+        <div className={`grid size-10 shrink-0 place-items-center rounded-xl ${iconTone}`}><Icon size={19} aria-hidden="true" /></div>
+      </div>
+      {sub && <p className="mt-3 border-t border-line pt-2.5 text-xs text-muted">{sub}</p>}
     </div>
   );
 }
@@ -92,14 +97,26 @@ export default function Overview() {
   if (!s.totals.debitCount && !s.totals.creditCount) {
     return (
       <>
-        <PageHeader title="Overview" />
-        <Empty title="No transactions yet">
-          Import a bank, card or expense statement and Complyra will check every line against your policies.
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <Link href="/dashboard/import" className="rounded-md bg-brand px-3.5 py-2 text-sm font-medium text-brand-ink">Import a statement</Link>
-            <a href="/sample/expenses-q2-fy27.csv" download className="rounded-md border border-line px-3.5 py-2 text-sm font-medium">Download a sample file</a>
+        <PageHeader title="Overview" sub="Your workspace is ready. Start by bringing in a statement." />
+        <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-sm" aria-labelledby="getting-started-title">
+          <div className="bg-gradient-to-br from-brand-soft via-surface to-surface px-6 py-8 sm:px-9 sm:py-10">
+            <div className="max-w-2xl">
+              <div className="mb-4 grid size-12 place-items-center rounded-2xl bg-brand text-brand-ink shadow-sm"><FileUp size={22} aria-hidden="true" /></div>
+              <h2 id="getting-started-title" className="text-xl font-semibold tracking-tight sm:text-2xl">Start with your first statement</h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-muted">Upload a bank, card, or expense statement. Complyra will map the columns, check transactions against your policies, and show you what needs review.</p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                {canWrite(session.user.role) ? <Link href="/dashboard/import" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-ink shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2"><FileUp size={16} /> Import a statement <ArrowRight size={15} /></Link> : <Link href="/dashboard/transactions" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-ink shadow-sm transition hover:opacity-90">View transactions <ArrowRight size={15} /></Link>}
+                <a href="/sample/expenses-q2-fy27.csv" download className="inline-flex min-h-10 items-center rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:bg-sunken">Download sample file</a>
+              </div>
+              <p className="mt-3 text-xs text-muted">CSV, Excel (.xlsx), and selectable-text PDF · up to 5 MB</p>
+            </div>
           </div>
-        </Empty>
+          <div className="grid divide-y divide-line border-t border-line sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div className="flex gap-3 p-4 sm:p-5"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft text-sm font-semibold text-brand">1</span><div><p className="text-sm font-semibold">Import</p><p className="mt-1 text-xs leading-5 text-muted">Columns are recognised automatically. Preview rejected rows before fixing them.</p></div></div>
+            <div className="flex gap-3 p-4 sm:p-5"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-med-bg text-sm font-semibold text-med">2</span><div><p className="text-sm font-semibold">Review</p><p className="mt-1 text-xs leading-5 text-muted">Check findings and record a decision with context for your audit trail.</p></div></div>
+            <div className="flex gap-3 p-4 sm:p-5"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-ok-bg text-sm font-semibold text-ok">3</span><div><p className="text-sm font-semibold">Export</p><p className="mt-1 text-xs leading-5 text-muted">Download a report with the findings, transactions, and review history.</p></div></div>
+          </div>
+        </section>
       </>
     );
   }
@@ -119,11 +136,11 @@ export default function Overview() {
         </>}
       />
 
-      <div className="grid divide-y divide-line border-y border-line sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4 [&>*]:sm:px-5">
-        <Figure label="Total spend" value={money(s.totals.spendPaise)} sub={s.totals.creditCount ? `${money(s.totals.creditPaise)} refunds excluded` : undefined} />
-        <Figure label="Open findings" value={String(s.findings.open)} sub={`${sev.high} high · ${sev.medium} medium · ${sev.low} low`} tone={sev.high ? "text-high" : ""} />
-        <Figure label="Spend in open findings" value={money(s.findings.flaggedSpendPaise)} sub={`${s.findings.flaggedTransactions} transactions`} />
-        <Figure label="Transactions with no flags" value={s.cleanRate === null ? "n/a" : `${s.cleanRate}%`} sub={`${s.findings.confirmed} confirmed · ${s.findings.dismissed} dismissed`} tone="text-ok" />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Figure icon={CircleDollarSign} iconTone="bg-brand-soft text-brand" label="Total spend" value={money(s.totals.spendPaise)} sub={s.totals.creditCount ? `${money(s.totals.creditPaise)} refunds excluded` : `${s.totals.debitCount} spend transactions`} />
+        <Figure icon={ShieldAlert} iconTone={sev.high ? "bg-high-bg text-high" : "bg-med-bg text-med"} label="Open findings" value={String(s.findings.open)} sub={`${sev.high} high · ${sev.medium} medium · ${sev.low} low`} tone={sev.high ? "text-high" : ""} />
+        <Figure icon={TriangleAlert} iconTone="bg-med-bg text-med" label="Spend in open findings" value={money(s.findings.flaggedSpendPaise)} sub={`${s.findings.flaggedTransactions} transactions to review`} />
+        <Figure icon={BadgeCheck} iconTone="bg-ok-bg text-ok" label="Transactions with no flags" value={s.cleanRate === null ? "n/a" : `${s.cleanRate}%`} sub={`${s.findings.confirmed} confirmed · ${s.findings.dismissed} dismissed`} tone="text-ok" />
       </div>
 
       {s.findings.open > 0 && (

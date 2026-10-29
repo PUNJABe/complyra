@@ -3,7 +3,9 @@ import { runAnalysis, loadRules } from "@/server/analysis";
 import { audit } from "@/server/audit";
 import { insertRule } from "@/server/bootstrap";
 import { getDb } from "@/server/db";
+import { newId, nowIso } from "@/server/db";
 import { jsonBody, route, WRITE } from "@/server/http";
+import { savePolicyVersion } from "@/server/policy-workflow";
 
 export const GET = route({}, async ({ clientId }) => {
   const db = getDb();
@@ -22,7 +24,15 @@ export const GET = route({}, async ({ clientId }) => {
 export const POST = route({ roles: WRITE }, async ({ req, user, clientId, ip }) => {
   const input = ruleInputSchema.parse(await jsonBody(req));
   const db = getDb();
+  if (user.role !== "admin") {
+    const id = newId();
+    await db.prepare("INSERT INTO policy_change_requests (id,client_id,rule_id,action,rule_json,requested_by,status,created_at) VALUES (?,?,NULL,'create',?,?,'pending',?)")
+      .run(id,clientId,JSON.stringify(input),user.email,nowIso());
+    await audit({ actor:user.email, action:"policy_change_requested", resource:input.name, clientId, ip, details:`Requested policy creation: ${input.name}.` },db);
+    return { requestId:id, pendingApproval:true };
+  }
   const id = await insertRule(db, clientId, input);
+  await savePolicyVersion(db,clientId,id,input.name,"created",input,user.email);
   await audit({ actor: user.email, action: "rule_created", resource: input.name, clientId, ip, details: `Rule "${input.name}" (${input.kind}, ${input.severity}) created.` }, db);
   return { id, analysis: await runAnalysis(clientId, user.email) };
 });

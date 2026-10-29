@@ -32,6 +32,14 @@ CREATE TABLE IF NOT EXISTS audit_log (seq INTEGER PRIMARY KEY,ts TEXT NOT NULL,a
 CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY,client_id TEXT,channel TEXT NOT NULL,title TEXT NOT NULL,message TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'queued',attempts INTEGER NOT NULL DEFAULT 0,max_attempts INTEGER NOT NULL DEFAULT 5,next_attempt_at TEXT NOT NULL,last_error TEXT,provider_id TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS deadlines (id TEXT PRIMARY KEY,client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,kind TEXT NOT NULL,label TEXT NOT NULL,due_date TEXT NOT NULL,done INTEGER NOT NULL DEFAULT 0,done_at TEXT,created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_deadlines_client ON deadlines (client_id,due_date);
+CREATE TABLE IF NOT EXISTS import_templates (id TEXT PRIMARY KEY,client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,name TEXT NOT NULL,options_json TEXT NOT NULL,created_by TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(client_id,name));
+CREATE TABLE IF NOT EXISTS finding_tasks (finding_id TEXT PRIMARY KEY REFERENCES findings(id) ON DELETE CASCADE,assignee TEXT,due_date TEXT,updated_by TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS finding_comments (id TEXT PRIMARY KEY,finding_id TEXT NOT NULL REFERENCES findings(id) ON DELETE CASCADE,author TEXT NOT NULL,body TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_finding_comments_finding ON finding_comments(finding_id,created_at);
+CREATE TABLE IF NOT EXISTS policy_versions (id TEXT PRIMARY KEY,client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,rule_id TEXT NOT NULL,rule_name TEXT NOT NULL,version INTEGER NOT NULL,change_type TEXT NOT NULL,rule_json TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_policy_versions_rule ON policy_versions(client_id,rule_id,version);
+CREATE TABLE IF NOT EXISTS policy_change_requests (id TEXT PRIMARY KEY,client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,rule_id TEXT,action TEXT NOT NULL,rule_json TEXT NOT NULL,requested_by TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',reviewed_by TEXT,review_note TEXT,created_at TEXT NOT NULL,reviewed_at TEXT);
+CREATE INDEX IF NOT EXISTS idx_policy_requests_client ON policy_change_requests(client_id,status,created_at);
 `;
 
 function positional(query: string, args: unknown[]): { query: string; args: unknown[] } {

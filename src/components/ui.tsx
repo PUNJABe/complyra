@@ -1,4 +1,5 @@
 "use client";
+import { Inbox } from "lucide-react";
 import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from "react";
 
 const BTN = {
@@ -12,12 +13,12 @@ export function Button({ variant = "primary", small, className = "", ...p }: But
   return (
     <button
       {...p}
-      className={`inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${small ? "px-2.5 py-1 text-xs" : "px-3.5 py-2 text-sm"} ${BTN[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:active:translate-y-0 ${small ? "min-h-8 px-2.5 py-1 text-xs" : "min-h-10 px-3.5 py-2 text-sm"} ${BTN[variant]} ${className}`}
     />
   );
 }
 
-const FIELD = "w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted/70";
+const FIELD = "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted/70 transition-colors focus-visible:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20";
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -65,9 +66,10 @@ export function PageHeader({ title, sub, actions }: { title: string; sub?: strin
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-line px-6 py-12 text-center">
-      <p className="font-medium">{title}</p>
-      {children && <div className="mx-auto mt-2 max-w-md text-sm text-muted">{children}</div>}
+    <div className="rounded-xl border border-dashed border-line bg-surface px-6 py-10 text-center shadow-sm">
+      <div className="mx-auto grid size-11 place-items-center rounded-full bg-brand-soft text-brand"><Inbox size={20} aria-hidden="true" /></div>
+      <p className="mt-3 font-semibold">{title}</p>
+      {children && <div className="mx-auto mt-2 max-w-lg text-sm text-muted">{children}</div>}
     </div>
   );
 }
@@ -95,10 +97,10 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
 }
 
 export function Table({ children }: { children: ReactNode }) {
-  return <div className="overflow-x-auto rounded-lg border border-line bg-surface"><table className="w-full text-left text-sm">{children}</table></div>;
+  return <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-sm"><table className="w-full text-left text-sm [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-sunken/50">{children}</table></div>;
 }
 export const Th = ({ children, right }: { children?: ReactNode; right?: boolean }) => (
-  <th scope="col" className={`border-b border-line bg-sunken px-3 py-2 text-xs font-semibold text-muted ${right ? "text-right" : ""}`}>{children}</th>
+  <th scope="col" className={`border-b border-line bg-sunken/70 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted ${right ? "text-right" : ""}`}>{children}</th>
 );
 export const Td = ({ children, right, mono, className = "" }: { children?: ReactNode; right?: boolean; mono?: boolean; className?: string }) => (
   <td className={`border-b border-line px-3 py-2 align-top ${right ? "text-right tabular-nums" : ""} ${mono ? "font-mono text-xs" : ""} ${className}`}>{children}</td>

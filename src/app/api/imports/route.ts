@@ -13,7 +13,9 @@ export const POST = route({ roles: WRITE }, async ({ req, user, clientId, ip }) 
   try { form = await req.formData(); } catch { throw new HttpError(400, "Upload the file as multipart form data."); }
   const file = form.get("file");
   if (!(file instanceof File)) throw new HttpError(400, "Choose a file to upload.");
-  const opts = { dayFirst: form.get("dateOrder") !== "mdy", negativeIsDebit: form.get("negatives") === "out" };
+  let columnMapping: Record<string, string> | undefined;
+  try { const raw = form.get("columnMapping"); if (typeof raw === "string" && raw) columnMapping = JSON.parse(raw) as Record<string,string>; } catch { throw new HttpError(400,"Saved column mapping is invalid."); }
+  const opts = { dayFirst: form.get("dateOrder") !== "mdy", negativeIsDebit: form.get("negatives") === "out", columnMapping };
   try {
     const result = await importStatement({ clientId, buffer: Buffer.from(await file.arrayBuffer()), filename: file.name, actor: user.email, opts, ip });
     const db = getDb();

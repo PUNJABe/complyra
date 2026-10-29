@@ -15,6 +15,8 @@ export type ParseOptions = {
   dayFirst: boolean;
   /** Single signed amount column: true = negative is money out (bank statements); false = negative is a refund. */
   negativeIsDebit: boolean;
+  /** Optional saved field-to-header mapping, used to repeat a previous import setup. */
+  columnMapping?: Record<string, string>;
 };
 
 export type ParsedRow = {
@@ -40,6 +42,7 @@ export type ParseResult = {
   headerLine: number;
   mapping: Record<string, string>;
   totalRows: number;
+  headers: string[];
 };
 
 type Cell = unknown;
@@ -65,12 +68,20 @@ const ALIASES: Record<string, string[]> = {
 
 const FIELD_ORDER = ["date", "amount", "debit", "credit", "type", "merchant", "employee", "department", "category", "invoice", "gstin", "reference"];
 
-function mapHeaders(headers: Cell[]): { map: Record<string, number>; labels: Record<string, string> } {
+function mapHeaders(headers: Cell[], overrides: Record<string, string> = {}): { map: Record<string, number>; labels: Record<string, string> } {
   const normalised = headers.map(norm);
   const used = new Set<number>();
   const map: Record<string, number> = {};
   const labels: Record<string, string> = {};
   for (const field of FIELD_ORDER) {
+    if (!Object.prototype.hasOwnProperty.call(overrides, field)) continue;
+    const override = overrides[field];
+    if (!override) continue;
+    const idx = normalised.findIndex((h, i) => h === norm(override) && !used.has(i));
+    if (idx !== -1) { map[field] = idx; labels[field] = String(headers[idx]).trim(); used.add(idx); }
+  }
+  for (const field of FIELD_ORDER) {
+    if (map[field] !== undefined || Object.prototype.hasOwnProperty.call(overrides, field)) continue;
     for (const alias of ALIASES[field]) {
       const idx = normalised.findIndex((h, i) => h === alias && !used.has(i));
       if (idx !== -1) {
@@ -200,11 +211,12 @@ async function gridFromPdf(buf: Buffer): Promise<Cell[][]> {
   try {
     pdf = await getDocument({
       data: new Uint8Array(buf),
-      useWasm: false,
       useWorkerFetch: false,
     }).promise;
-  } catch {
-    throw new ParseError("Could not read this PDF. The file may be invalid or image-only; upload a valid, text-based statement.");
+  } catch (error) {
+    console.error("PDF load failed", error);
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    throw new ParseError(`Could not read this PDF (${detail}). The file may be invalid or image-only; upload a valid, text-based statement.`);
   }
   const lines: PdfLine[] = [];
   try {
@@ -312,7 +324,7 @@ export async function parseStatement(buf: Buffer, filename: string, opts: ParseO
   let headerIdx = -1;
   let mapped: ReturnType<typeof mapHeaders> | null = null;
   for (let i = 0; i < Math.min(grid.length, 15); i++) {
-    const m = mapHeaders(grid[i] ?? []);
+    const m = mapHeaders(grid[i] ?? [], opts.columnMapping);
     if (looksLikeHeader(m.map)) { headerIdx = i; mapped = m; break; }
   }
   if (headerIdx === -1 || !mapped) {
@@ -394,5 +406,6 @@ export async function parseStatement(buf: Buffer, filename: string, opts: ParseO
   return {
     rows, rejected, ignored, headerLine: headerIdx + 1,
     mapping: labels, totalRows: rows.length + rejected.length + ignored,
+    headers: (grid[headerIdx] ?? []).map((h, i) => String(h ?? "").trim() || `Column ${i + 1}`),
   };
 }

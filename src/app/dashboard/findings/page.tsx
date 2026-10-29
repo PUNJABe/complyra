@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
 import { api, errorText, useApi } from "@/lib/client-api";
@@ -7,9 +8,9 @@ import { Button, Empty, ErrorNote, Input, Loading, PageHeader, Select, SeverityB
 import { useToast } from "@/components/toast";
 import { KIND_META } from "@/lib/rules";
 
-type Item = { id: string; rule_kind: string; rule_name: string; severity: string; title: string; why: string; evidence: string; amount_paise: number; status: string; reviewed_by: string | null; review_note: string | null; reviewed_at: string | null; first_seen_at: string; txnCount: number };
+type Item = { id: string; rule_kind: string; rule_name: string; severity: string; title: string; why: string; evidence: string; amount_paise: number; status: string; reviewed_by: string | null; review_note: string | null; reviewed_at: string | null; first_seen_at: string; txnCount: number; assignee?: string | null; due_date?: string | null };
 type Txn = { id: string; date: string; merchant: string; amountPaise: number; direction: string; employee: string; category: string; invoiceNo: string };
-type Detail = Item & { transactions: Txn[] };
+type Detail = Item & { transactions: Txn[]; assignees: { email: string; name: string }[]; comments: { id: string; author: string; body: string; created_at: string }[] };
 
 const STATUSES = [["open", "Open"], ["escalated", "Escalated"], ["confirmed", "Confirmed"], ["dismissed", "Dismissed"], ["all", "All"]];
 const BAR: Record<string, string> = { high: "border-l-high", medium: "border-l-med", low: "border-l-low" };
@@ -25,6 +26,7 @@ export default function Findings() {
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [comment, setComment] = useState("");
   const noteRef = useRef<HTMLTextAreaElement>(null);
 
   const qs = new URLSearchParams();
@@ -75,6 +77,18 @@ export default function Findings() {
     try { await api("/api/findings/bulk", { method: "POST", json: { ids: [...checked], status, note } }); toast(`${checked.size} findings marked ${status}.`); setChecked(new Set()); setNote(""); list.reload(); }
     catch (e) { setErr(errorText(e)); } finally { setBusy(false); }
   };
+  const saveTask = async (updates: { assignee?: string | null; dueDate?: string | null }) => {
+    if (!activeId || !writer) return;
+    try { await api(`/api/findings/${activeId}`, { method: "PATCH", json: updates }); detail.reload(); list.reload(); toast("Follow-up updated."); }
+    catch (e) { toast(errorText(e), "error"); }
+  };
+  const addComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeId || !comment.trim()) return;
+    setBusy(true);
+    try { await api(`/api/findings/${activeId}/comments`, { method: "POST", json: { body: comment } }); setComment(""); detail.reload(); toast("Follow-up note added."); }
+    catch (e2) { toast(errorText(e2), "error"); } finally { setBusy(false); }
+  };
   const toggle = (id: string) => setChecked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const d = detail.data && detail.data.id === activeId ? detail.data : null;
 
@@ -93,7 +107,17 @@ export default function Findings() {
 
       {list.error && <ErrorNote>{list.error}</ErrorNote>}
       {list.loading && <Loading />}
-      {list.data && items.length === 0 && <Empty title={f.status === "open" ? "Nothing left to review" : "No findings match"}>{f.status === "open" ? "Every open finding has a decision. Import more data or adjust your policies to find more." : "Try a different filter."}</Empty>}
+      {list.data && items.length === 0 && <Empty title={f.status === "open" ? "Nothing left to review" : "No findings match"}>
+        {f.status === "open" ? (
+          <>
+            Every open finding has a decision. Import more data or adjust a policy to continue checking transactions.
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {writer && <Link href="/dashboard/import" className="inline-flex min-h-9 items-center rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-brand-ink transition hover:opacity-90">Import a statement</Link>}
+              <Link href="/dashboard/policies" className="inline-flex min-h-9 items-center rounded-lg border border-line bg-surface px-3.5 py-2 text-sm font-medium text-ink transition hover:bg-sunken">Review policies</Link>
+            </div>
+          </>
+        ) : "Try a different filter or search term."}
+      </Empty>}
 
       {items.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-[380px_1fr]">
@@ -101,7 +125,7 @@ export default function Findings() {
             {writer && checked.size > 0 && (
               <div className="mb-2 space-y-2 rounded-lg border border-brand/40 bg-brand-soft p-3 text-sm">
                 <p className="font-medium">{checked.size} selected</p>
-                <div className="flex gap-2"><Button small variant="secondary" disabled={busy} onClick={() => bulk("confirmed")}>Confirm</Button><Button small variant="secondary" disabled={busy} onClick={() => bulk("dismissed")}>Dismiss (needs note)</Button><Button small variant="ghost" onClick={() => setChecked(new Set())}>Clear</Button></div>
+                <div className="flex flex-wrap gap-2"><Button small disabled={busy} onClick={() => bulk("confirmed")}>Confirm findings</Button><Button small variant="secondary" disabled={busy} onClick={() => bulk("dismissed")}>Dismiss with note</Button><Button small variant="ghost" onClick={() => setChecked(new Set())}>Clear selection</Button></div>
               </div>
             )}
             <ul className="max-h-[70vh] divide-y divide-line overflow-y-auto rounded-lg border border-line bg-surface" aria-label="Findings">
@@ -129,6 +153,15 @@ export default function Findings() {
                 </div>
                 <div><h3 className="mb-1 text-sm font-semibold">Why it was flagged</h3><p className="text-sm">{d.why}</p></div>
                 <div><h3 className="mb-1 text-sm font-semibold">Evidence</h3><p className="text-sm text-muted">{d.evidence}</p></div>
+                <div className="rounded-xl border border-line bg-canvas/50 p-4">
+                  <h3 className="mb-3 text-sm font-semibold">Follow-up</h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block"><span className="mb-1 block text-xs font-medium text-muted">Assigned to</span><Select disabled={!writer} value={d.assignee ?? ""} onChange={(e) => saveTask({ assignee: e.target.value || null })}><option value="">Unassigned</option>{d.assignees?.map((person) => <option key={person.email} value={person.email}>{person.name} · {person.email}</option>)}</Select></label>
+                    <label className="block"><span className="mb-1 block text-xs font-medium text-muted">Due date</span><Input disabled={!writer} type="date" value={d.due_date ?? ""} onChange={(e) => saveTask({ dueDate: e.target.value || null })} /></label>
+                  </div>
+                  {d.comments?.length > 0 && <ol className="mt-4 space-y-3 border-t border-line pt-3">{d.comments.map((entry) => <li key={entry.id} className="text-sm"><p className="font-medium">{entry.author}<span className="ml-2 text-xs font-normal text-muted">{new Date(entry.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span></p><p className="mt-0.5 whitespace-pre-wrap text-muted">{entry.body}</p></li>)}</ol>}
+                  {writer && <form className="mt-3 flex gap-2 border-t border-line pt-3" onSubmit={addComment}><Input value={comment} onChange={(e) => setComment(e.target.value)} maxLength={2000} placeholder="Add a follow-up note…" aria-label="Follow-up note" /><Button small disabled={busy || !comment.trim()}>Add note</Button></form>}
+                </div>
                 {d.transactions.length > 0 && (
                   <div>
                     <h3 className="mb-2 text-sm font-semibold">Transactions involved ({d.txnCount})</h3>
@@ -147,10 +180,10 @@ export default function Findings() {
                     {err && <ErrorNote>{err}</ErrorNote>}
                     <div className="flex flex-wrap gap-2">
                       {d.status === "open" || d.status === "escalated" ? (<>
-                        <Button variant="danger" disabled={busy} onClick={() => act("confirmed")}>Confirm violation</Button>
-                        {d.status === "open" && <Button variant="secondary" disabled={busy} onClick={() => act("escalated")}>Escalate</Button>}
-                        <Button variant="secondary" disabled={busy} onClick={() => act("dismissed")}>Dismiss</Button>
-                      </>) : <Button variant="secondary" disabled={busy} onClick={() => act("open")}>Reopen</Button>}
+                        <Button disabled={busy} onClick={() => act("confirmed")} title="Record this finding as confirmed in the audit trail">Confirm finding</Button>
+                        {d.status === "open" && <Button variant="secondary" disabled={busy} onClick={() => act("escalated")} title="Send this finding for further review">Escalate for review</Button>}
+                        <Button variant="secondary" disabled={busy} onClick={() => act("dismissed")} title="Dismiss this finding with a required note">Dismiss finding</Button>
+                      </>) : <Button variant="secondary" disabled={busy} onClick={() => act("open")}>Reopen finding</Button>}
                     </div>
                   </div>
                 )}
