@@ -22,11 +22,11 @@ let clientId = "";
 let result: Awaited<ReturnType<typeof importStatement>>;
 
 type F = { rule_kind: string; title: string; why: string; status: string; severity: string; id: string };
-const findings = () => db.prepare("SELECT * FROM findings WHERE client_id = ?").all(clientId) as F[];
+const findings = async () => await db.prepare("SELECT * FROM findings WHERE client_id = ?").all(clientId) as F[];
 
 beforeAll(async () => {
-  clientId = createClient(db, { name: "Acme Industries" });
-  seedDefaultRules(db, clientId);
+  clientId = await createClient(db, { name: "Acme Industries" });
+  await seedDefaultRules(db, clientId);
   result = await importStatement({ clientId, buffer: sample, filename: "expenses.csv", actor: "tester", opts }, db);
 });
 
@@ -42,37 +42,38 @@ describe("import of a realistic statement", () => {
     expect(result.rejectedRows.map((r) => r.reason).join(" | ")).toMatch(/Unrecognised date "31\/02\/2026".*not a number/);
     expect(result.credits).toBe(1);
   });
-  it("stores amounts as integer paise and the refund as a credit, not spend", () => {
-    const refund = db.prepare("SELECT * FROM transactions WHERE merchant = 'Amazon Business' AND direction = 'credit'").get() as { amount_paise: number };
+  it("stores amounts as integer paise and the refund as a credit, not spend", async () => {
+    const refund = await db.prepare("SELECT * FROM transactions WHERE merchant = 'Amazon Business' AND direction = 'credit'").get() as { amount_paise: number };
     expect(refund.amount_paise).toBe(249900);
   });
-  it("reads DD/MM/YYYY as day-first", () => {
-    const d = db.prepare("SELECT txn_date FROM transactions WHERE merchant='Apex Laptops India'").get() as { txn_date: string };
+  it("reads DD/MM/YYYY as day-first", async () => {
+    const d = await db.prepare("SELECT txn_date FROM transactions WHERE merchant='Apex Laptops India'").get() as { txn_date: string };
     expect(d.txn_date).toBe("2026-09-02");
   });
 });
 
 describe("planted violations are found, with explanations", () => {
-  const has = (kind: string, needle: string) => findings().some((f) => f.rule_kind === kind && (f.title + f.why + (f as unknown as { evidence: string }).evidence).toLowerCase().includes(needle.toLowerCase()));
-  it("duplicate payment", () => expect(has("duplicate_payment", "Swiggy")).toBe(true));
-  it("split payments to Zenith that total ₹73,500", () => expect(has("split_payment", "₹73,500")).toBe(true));
-  it("high-value Apex purchase", () => expect(has("amount_over", "Apex")).toBe(true));
-  it("prohibited casino and liquor", () => {
-    expect(has("blocked_keywords", "casino")).toBe(true);
-    expect(has("blocked_keywords", "liquor")).toBe(true);
+  const has = async (kind: string, needle: string) => (await findings()).some((f) => f.rule_kind === kind && (f.title + f.why + (f as unknown as { evidence: string }).evidence).toLowerCase().includes(needle.toLowerCase()));
+  it("duplicate payment", async () => expect(await has("duplicate_payment", "Swiggy")).toBe(true));
+  it("split payments to Zenith that total ₹73,500", async () => expect(await has("split_payment", "₹73,500")).toBe(true));
+  it("high-value Apex purchase", async () => expect(await has("amount_over", "Apex")).toBe(true));
+  it("prohibited casino and liquor", async () => {
+    expect(await has("blocked_keywords", "casino")).toBe(true);
+    expect(await has("blocked_keywords", "liquor")).toBe(true);
   });
-  it("invalid GSTIN names the real reason", () => expect(has("invalid_gstin", "check character")).toBe(true));
-  it("does NOT flag valid GSTINs", () => {
-    const bad = findings().filter((f) => f.rule_kind === "invalid_gstin");
+  it("invalid GSTIN names the real reason", async () => expect(await has("invalid_gstin", "check character")).toBe(true));
+  it("does NOT flag valid GSTINs", async () => {
+    const bad = (await findings()).filter((f) => f.rule_kind === "invalid_gstin");
     expect(bad).toHaveLength(1);
   });
-  it("outlier food expense", () => expect(has("outlier", "Barbeque")).toBe(true));
-  it("missing invoice for large expense", () => expect(has("missing_invoice", "Metro Cash")).toBe(true));
-  it("weekend hotel stay", () => expect(has("weekend_spend", "Hotel Grand Mercure")).toBe(true));
-  it("round-figure advisory fee", () => expect(has("round_amount", "Prime Advisory")).toBe(true));
-  it("noise stays proportionate (not every row is a finding)", () => {
-    const total = findings().length;
-    console.log("Findings by rule:", Object.entries(findings().reduce<Record<string, number>>((a, f) => ((a[f.rule_kind] = (a[f.rule_kind] ?? 0) + 1), a), {})));
+  it("outlier food expense", async () => expect(await has("outlier", "Barbeque")).toBe(true));
+  it("missing invoice for large expense", async () => expect(await has("missing_invoice", "Metro Cash")).toBe(true));
+  it("weekend hotel stay", async () => expect(await has("weekend_spend", "Hotel Grand Mercure")).toBe(true));
+  it("round-figure advisory fee", async () => expect(await has("round_amount", "Prime Advisory")).toBe(true));
+  it("noise stays proportionate (not every row is a finding)", async () => {
+    const all = await findings();
+    const total = all.length;
+    console.log("Findings by rule:", Object.entries(all.reduce<Record<string, number>>((a, f) => ((a[f.rule_kind] = (a[f.rule_kind] ?? 0) + 1), a), {})));
     expect(total).toBeGreaterThan(10);
     expect(total).toBeLessThan(45);
   });
@@ -80,52 +81,53 @@ describe("planted violations are found, with explanations", () => {
 
 describe("idempotency and review workflow", () => {
   it("re-importing the same file adds nothing and does not double count", async () => {
-    const before = (db.prepare("SELECT COUNT(*) n FROM transactions").get() as { n: number }).n;
+    const before = (await db.prepare("SELECT COUNT(*) n FROM transactions").get() as { n: number }).n;
     const again = await importStatement({ clientId, buffer: sample, filename: "expenses-again.csv", actor: "tester", opts }, db);
     expect(again.imported).toBe(0);
     expect(again.duplicates).toBe(137);
-    expect((db.prepare("SELECT COUNT(*) n FROM transactions").get() as { n: number }).n).toBe(before);
+    expect((await db.prepare("SELECT COUNT(*) n FROM transactions").get() as { n: number }).n).toBe(before);
   });
   it("keeps genuinely identical purchases within one file", async () => {
     const csv = "Date,Merchant,Amount\n01/07/2026,Chai Point,120\n01/07/2026,Chai Point,120\n";
-    const c2 = createClient(db, { name: "Other Co" });
+    const c2 = await createClient(db, { name: "Other Co" });
     const r = await importStatement({ clientId: c2, buffer: Buffer.from(csv), filename: "x.csv", actor: "t", opts }, db);
     expect(r.imported).toBe(2);
   });
-  it("preserves a reviewer's decision when analysis re-runs", () => {
-    const target = findings().find((f) => f.rule_kind === "amount_over")!;
-    db.prepare("UPDATE findings SET status='dismissed', review_note='Approved by CFO', reviewed_by='cfo@x.com' WHERE id=?").run(target.id);
-    runAnalysis(clientId, "tester", db);
-    const after = db.prepare("SELECT status, review_note FROM findings WHERE id=?").get(target.id) as { status: string; review_note: string };
+  it("preserves a reviewer's decision when analysis re-runs", async () => {
+    const target = (await findings()).find((f) => f.rule_kind === "amount_over")!;
+    await db.prepare("UPDATE findings SET status='dismissed', review_note='Approved by CFO', reviewed_by='cfo@x.com' WHERE id=?").run(target.id);
+    await runAnalysis(clientId, "tester", db);
+    const after = await db.prepare("SELECT status, review_note FROM findings WHERE id=?").get(target.id) as { status: string; review_note: string };
     expect(after).toEqual({ status: "dismissed", review_note: "Approved by CFO" });
   });
-  it("removing an import clears its open findings", () => {
-    const imp = db.prepare("SELECT id FROM imports WHERE client_id=? ORDER BY created_at LIMIT 1").get(clientId) as { id: string };
-    const s = deleteImport(imp.id, clientId, "tester", db)!;
+  it("removing an import clears its open findings", async () => {
+    const imp = await db.prepare("SELECT id FROM imports WHERE client_id=? ORDER BY created_at LIMIT 1").get(clientId) as { id: string };
+    const s = await deleteImport(imp.id, clientId, "tester", db);
+    if (!s) throw new Error("expected import removal summary");
     expect(s.removed).toBeGreaterThan(0);
-    expect((db.prepare("SELECT COUNT(*) n FROM transactions WHERE client_id=?").get(clientId) as { n: number }).n).toBe(0);
+    expect((await db.prepare("SELECT COUNT(*) n FROM transactions WHERE client_id=?").get(clientId) as { n: number }).n).toBe(0);
     // the reviewed finding survives as history
-    expect(findings().filter((f) => f.status === "dismissed")).toHaveLength(1);
+    expect((await findings()).filter((f) => f.status === "dismissed")).toHaveLength(1);
   });
 });
 
 describe("audit trail", () => {
-  it("is intact after all of the above", () => {
-    const v = verifyAudit(db);
+  it("is intact after all of the above", async () => {
+    const v = await verifyAudit(db);
     expect(v.ok).toBe(true);
     if (v.ok) expect(v.entries).toBeGreaterThan(5);
   });
-  it("cannot be edited or deleted through SQL", () => {
-    expect(() => db.prepare("UPDATE audit_log SET actor='mallory' WHERE seq=1").run()).toThrow(/append-only/);
-    expect(() => db.prepare("DELETE FROM audit_log WHERE seq=1").run()).toThrow(/append-only/);
+  it("cannot be edited or deleted through SQL", async () => {
+    await expect(db.prepare("UPDATE audit_log SET actor='mallory' WHERE seq=1").run()).rejects.toThrow(/append-only/);
+    await expect(db.prepare("DELETE FROM audit_log WHERE seq=1").run()).rejects.toThrow(/append-only/);
   });
-  it("detects tampering even if someone bypasses the triggers (e.g. edits the file)", () => {
+  it("detects tampering even if someone bypasses the triggers (e.g. edits the file)", async () => {
     const d2 = openDb(":memory:");
-    for (let i = 0; i < 5; i++) audit({ actor: "a", action: "x", details: `entry ${i}` }, d2);
-    expect(verifyAudit(d2).ok).toBe(true);
+    for (let i = 0; i < 5; i++) await audit({ actor: "a", action: "x", details: `entry ${i}` }, d2);
+    expect((await verifyAudit(d2)).ok).toBe(true);
     d2.exec("DROP TRIGGER audit_log_no_update");
     d2.prepare("UPDATE audit_log SET details='forged' WHERE seq=3").run();
-    const v = verifyAudit(d2);
+    const v = await verifyAudit(d2);
     expect(v.ok).toBe(false);
     if (!v.ok) expect(v.brokenAtSeq).toBe(3);
   });
