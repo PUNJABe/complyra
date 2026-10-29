@@ -9,9 +9,9 @@ export async function dashboardStats(clientId: string, db: DatabaseLike = getDb(
 
   const totals = await one<{ spend: number | null; debits: number; credit: number | null; credits: number; first: string | null; last: string | null }>(
     `SELECT SUM(CASE WHEN direction='debit' THEN amount_paise END) spend,
-            SUM(direction='debit') debits,
+            SUM(CASE WHEN direction='debit' THEN 1 ELSE 0 END) debits,
             SUM(CASE WHEN direction='credit' THEN amount_paise END) credit,
-            SUM(direction='credit') credits, MIN(txn_date) first, MAX(txn_date) last
+            SUM(CASE WHEN direction='credit' THEN 1 ELSE 0 END) credits, MIN(txn_date) first, MAX(txn_date) last
      FROM transactions WHERE client_id = ?`, clientId);
 
   const byMonth = await all<{ month: string; paise: number }>(
