@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthFrame, PasswordField } from "@/components/auth-form";
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
@@ -11,16 +11,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [needsSetup, setNeedsSetup] = useState(false);
-
-  useEffect(() => {
-    api<{ needsSetup: boolean }>("/api/setup")
-      .then((r) => {
-        setNeedsSetup(r.needsSetup);
-        if (r.needsSetup) router.replace("/setup");
-      })
-      .catch(() => {});
-  }, [router]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +28,7 @@ export default function LoginPage() {
     <AuthFrame
       title="Sign in"
       sub="Use the account your administrator created for you."
-      footer={needsSetup ? <>Setting up for the first time? <a href="/setup" className="font-medium text-brand hover:underline">Create a workspace</a></> : <>Need access? Contact your workspace administrator.</>}
+      footer={<>New to Complyra? <a href="/setup" className="font-medium text-brand hover:underline">Sign up</a></>}
     >
       <form onSubmit={submit} className="space-y-4">
         <Field label="Email"><Input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>

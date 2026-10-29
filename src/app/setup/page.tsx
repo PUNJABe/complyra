@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthFrame, PasswordField } from "@/components/auth-form";
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
@@ -11,10 +11,6 @@ export default function SetupPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
-
-  useEffect(() => {
-    api<{ needsSetup: boolean }>("/api/setup").then((r) => !r.needsSetup && router.replace("/login")).catch(() => {});
-  }, [router]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

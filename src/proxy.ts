@@ -22,7 +22,7 @@ export function proxy(req: NextRequest) {
     if (signedIn && pathname === "/login") return NextResponse.redirect(new URL("/dashboard", req.url));
     return NextResponse.next();
   }
-  if (pathname === "/") return NextResponse.redirect(new URL(signedIn ? "/dashboard" : "/login", req.url));
+  if (pathname === "/") return NextResponse.next();
   if (!signedIn) return NextResponse.redirect(new URL("/login", req.url));
   return NextResponse.next();
 }
