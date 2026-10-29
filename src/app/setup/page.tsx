@@ -24,7 +24,7 @@ export default function SetupPage() {
   return (
     <AuthFrame
       title="Set up your workspace"
-      sub="Create the administrator account and your first client. This screen only appears once."
+      sub="Create your administrator account and workspace. You can sign up even if another workspace already exists."
       footer={<>Already have an account? <a href="/login" className="font-medium text-brand hover:underline">Sign in</a></>}
     >
       <form onSubmit={submit} className="space-y-4">
@@ -37,7 +37,7 @@ export default function SetupPage() {
           <Field label="PAN (optional)"><Input value={f.pan} onChange={set("pan")} maxLength={10} className="font-mono" /></Field>
         </div>
         {error && <ErrorNote>{error}</ErrorNote>}
-        <Button type="submit" disabled={busy} className="w-full">{busy ? "Creating…" : "Create workspace"}</Button>
+        <Button type="submit" disabled={busy} className="w-full">{busy ? "Creating…" : "Sign up"}</Button>
       </form>
     </AuthFrame>
   );
