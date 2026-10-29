@@ -46,15 +46,13 @@ export async function createUser(
   return id;
 }
 
-/** First-run setup: only works while there are no users. Creates the admin, the first client and the default rule pack. */
-export async function firstRunSetup(
+/** Creates an administrator, workspace client, and default rule pack. */
+export async function createWorkspace(
   db: DatabaseLike,
   input: { email: string; name: string; password: string; clientName: string; gstin?: string; pan?: string; ip?: string },
 ): Promise<{ userId: string; clientId: string }> {
-  if (await hasUsers(db)) throw new Error("already_setup");
   const hash = await hashPassword(input.password);
   return db.transaction(async () => {
-    if (await hasUsers(db)) throw new Error("already_setup"); // re-check inside the transaction
     const userId = newId();
     await db.prepare("INSERT INTO users (id, email, name, password_hash, role, active, created_at) VALUES (?,?,?,?, 'admin',1,?)").run(
       userId, input.email.trim().toLowerCase(), input.name.trim(), hash, nowIso(),
@@ -65,3 +63,5 @@ export async function firstRunSetup(
     return { userId, clientId };
   });
 }
+
+export const firstRunSetup = createWorkspace;

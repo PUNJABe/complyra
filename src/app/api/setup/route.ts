@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CLIENT_COOKIE, isSecureRequest, passwordProblem, serializeCookie, SESSION_COOKIE, SESSION_TTL_MS, signSession } from "@/server/auth";
-import { firstRunSetup, hasUsers } from "@/server/bootstrap";
+import { createWorkspace, hasUsers } from "@/server/bootstrap";
 import { getDb } from "@/server/db";
 import { HttpError, jsonBody, route } from "@/server/http";
 import { hit } from "@/server/ratelimit";
@@ -14,20 +14,14 @@ const schema = z.object({
   pan: z.string().trim().max(10).optional(),
 });
 
-export const GET = route({ public: true }, async () => ({ needsSetup: !(await hasUsers()) }));
+export const GET = route({ public: true }, async () => ({ needsSetup: !(await hasUsers()), signupAvailable: true }));
 
 export const POST = route({ public: true }, async ({ req, ip }) => {
   if (!hit(`setup:${ip}`, 10, 15 * 60_000).allowed) throw new HttpError(429, "Too many attempts. Try again later.");
   const body = schema.parse(await jsonBody(req));
   const problem = passwordProblem(body.password);
   if (problem) throw new HttpError(400, problem);
-  let ids;
-  try {
-    ids = await firstRunSetup(getDb(), { ...body, ip });
-  } catch (e) {
-    if (e instanceof Error && e.message === "already_setup") throw new HttpError(409, "This workspace is already set up. Sign in instead.");
-    throw e;
-  }
+  const ids = await createWorkspace(getDb(), { ...body, ip });
   const secure = isSecureRequest(req);
   const res = Response.json({ ok: true });
   res.headers.append("Set-Cookie", serializeCookie(SESSION_COOKIE, signSession(ids.userId), { maxAgeSec: SESSION_TTL_MS / 1000, secure }));
