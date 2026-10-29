@@ -200,7 +200,7 @@ async function gridFromPdf(buf: Buffer): Promise<Cell[][]> {
   try {
     pdf = await getDocument({ data: new Uint8Array(buf) }).promise;
   } catch {
-    throw new ParseError("Could not read this PDF. PDF statements are not supported when the file is invalid; upload a valid, text-based statement.");
+    throw new ParseError("Could not read this PDF. The file may be invalid or image-only; upload a valid, text-based statement.");
   }
   const lines: PdfLine[] = [];
   try {
